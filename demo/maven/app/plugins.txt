@@ -1,0 +1,2 @@
+org.pf4j.demo:pf4j-maven-demo-plugin1:jar:plugin:1.0.0-SNAPSHOT
+#org.pf4j.demo:pf4j-maven-demo-plugin2:jar:plugin:1.0.0-SNAPSHOT

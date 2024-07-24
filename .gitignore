@@ -1,0 +1,9 @@
+target/
+.classpath
+.project
+.settings
+.idea/
+*.iml
+demo-dist/
+/demo/maven/app/local-repo/
+/demo/maven/app/plugins/
