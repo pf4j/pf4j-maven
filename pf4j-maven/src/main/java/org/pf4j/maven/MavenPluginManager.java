@@ -26,16 +26,11 @@ import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
 import org.pf4j.CompoundPluginDescriptorFinder;
 import org.pf4j.CompoundPluginLoader;
-import org.pf4j.DefaultPluginLoader;
 import org.pf4j.DefaultPluginManager;
 import org.pf4j.DevelopmentPluginLoader;
-import org.pf4j.JarPluginLoader;
-import org.pf4j.ManifestPluginDescriptorFinder;
 import org.pf4j.PluginDescriptorFinder;
 import org.pf4j.PluginLoader;
 import org.pf4j.PluginRuntimeException;
-import org.pf4j.PropertiesPluginDescriptorFinder;
-import org.pf4j.ZipPluginManager;
 import org.pf4j.maven.util.MavenUtils;
 import org.pf4j.util.FileUtils;
 import org.slf4j.Logger;
@@ -68,12 +63,7 @@ public class MavenPluginManager extends DefaultPluginManager {
 
     @Override
     public void loadPlugins() {
-        List<String> plugins;
-        try {
-            plugins = FileUtils.readLines(Paths.get("plugins.txt"), true);
-        } catch (IOException e) {
-            throw new PluginRuntimeException("Cannot read plugins.txt", e);
-        }
+        List<String> plugins = readPlugins();
 
         try (RepositorySystem system = MavenUtils.getRepositorySystem()) {
             try (RepositorySystemSession.CloseableSession session = MavenUtils.getRepositorySystemSession(system).build()) {
@@ -86,70 +76,97 @@ public class MavenPluginManager extends DefaultPluginManager {
                         log.info("'{}' resolved to  '{}'", artifact, artifact.getPath());
 
                         CollectResult collectResult = MavenUtils.collectDependencies(plugin, system, session);
-                        collectResult.getRoot().accept(MavenUtils.DUMPER_SOUT);
+                        collectResult.getRoot().accept(MavenUtils.DUMPER_LOG);
 
-                        // create plugin directory and copy the artifact
+                        // create plugin directory and copy the plugin artifact
                         Path pluginPath = getPluginsRoot().resolve(artifact.getArtifactId());
-                        try {
-                            Files.createDirectories(pluginPath);
-                            log.info("Plugin directory created '{}'", pluginPath);
-                        } catch (IOException e) {
-                            throw new PluginRuntimeException("Cannot create plugin directory", e);
-                        }
-
-                        try {
-                            Path artifactPath = artifact.getPath();
-                            Files.copy(artifactPath, pluginPath.resolve(artifactPath.getFileName()), StandardCopyOption.REPLACE_EXISTING);
-                            log.info("Plugin artifact copied to '{}'", pluginPath);
-                        } catch (IOException e) {
-                            throw new PluginRuntimeException("Cannot copy plugin artifact", e);
-                        }
+                        createPluginDirectory(pluginPath);
+                        copyPluginArtifact(artifact, pluginPath);
 
                         // create 'lib' directory
                         Path libPath = pluginPath.resolve("lib");
-                        try {
-                            Files.createDirectories(libPath);
-                            log.info("Plugin 'lib' directory created '{}'", libPath);
-                        } catch (IOException e) {
-                            throw new PluginRuntimeException("Cannot create plugin 'lib' directory", e);
-                        }
+                        createPluginLibDirectory(libPath);
 
                         // copy dependencies to plugin 'lib' directory
-                        collectResult.getRoot().getChildren().forEach(node -> {
-                            Dependency dependency = node.getDependency();
-                            if (dependency.getScope().equals("provided")) {
-                                return;
-                            }
-
-                            Artifact depArtifact = dependency.getArtifact();
-
-                            // resolve dependency artifact
-                            try {
-                                ArtifactResult depResult = MavenUtils.resolvePlugin(depArtifact.toString(), system, session);
-                                depArtifact = depResult.getArtifact();
-                                log.info("Dependency '{}' resolved to  '{}'", depArtifact, depArtifact.getPath());
-                            } catch (ArtifactResolutionException e) {
-                                log.error(e.getMessage(), e);
-                                return;
-                            }
-
-                            Path depArtifactPath = depArtifact.getPath();
-                            Path depPluginPath = libPath.resolve(depArtifactPath.getFileName());
-                            try {
-                                Files.copy(depArtifactPath, depPluginPath, StandardCopyOption.REPLACE_EXISTING);
-                                log.info("Dependency '{}' copied to '{}'", depArtifact, depPluginPath);
-                            } catch (IOException e) {
-                                throw new PluginRuntimeException("Cannot copy plugin dependency artifact", e);
-                            }
-                        });
+                        copyDependencies(collectResult, system, session, libPath);
                     } catch (ArtifactResolutionException | ArtifactDescriptorException | DependencyCollectionException e) {
-                        log.error(e.getMessage(), e);
+                        log.error("Cannot resolve plugin '{}'", plugin, e);
                     }
                 });
             }
         }
 
         super.loadPlugins();
+    }
+
+    protected List<String> readPlugins() {
+        try {
+            return FileUtils.readLines(Paths.get("plugins.txt"), true);
+        } catch (IOException e) {
+            throw new PluginRuntimeException("Cannot read plugins.txt", e);
+        }
+    }
+
+    private static void createPluginDirectory(Path pluginPath) {
+        try {
+            Files.createDirectories(pluginPath);
+            log.info("Plugin directory created '{}'", pluginPath);
+        } catch (IOException e) {
+            throw new PluginRuntimeException("Cannot create plugin directory", e);
+        }
+    }
+
+    private static void createPluginLibDirectory(Path libPath) {
+        try {
+            Files.createDirectories(libPath);
+            log.info("Plugin 'lib' directory created '{}'", libPath);
+        } catch (IOException e) {
+            throw new PluginRuntimeException("Cannot create plugin 'lib' directory", e);
+        }
+    }
+
+    private static void copyPluginArtifact(Artifact artifact, Path pluginPath) {
+        try {
+            Path artifactPath = artifact.getPath();
+            Files.copy(artifactPath, pluginPath.resolve(artifactPath.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+            log.info("Plugin artifact copied to '{}'", pluginPath);
+        } catch (IOException e) {
+            throw new PluginRuntimeException("Cannot copy plugin artifact", e);
+        }
+    }
+
+    private static void copyDependencies(CollectResult collectResult, RepositorySystem system, RepositorySystemSession.CloseableSession session, Path libPath) {
+        collectResult.getRoot().getChildren().forEach(node -> {
+            Dependency dependency = node.getDependency();
+            if (dependency.getScope().equals("provided")) {
+                return;
+            }
+
+            Artifact depArtifact = dependency.getArtifact();
+
+            // resolve dependency artifact
+            try {
+                ArtifactResult depResult = MavenUtils.resolveArtifact(depArtifact, system, session);
+                depArtifact = depResult.getArtifact();
+                log.info("Dependency '{}' resolved to  '{}'", depArtifact, depArtifact.getPath());
+            } catch (ArtifactResolutionException e) {
+                log.error(e.getMessage(), e);
+                return;
+            }
+
+            copyPluginDependency(libPath, depArtifact);
+        });
+    }
+
+    private static void copyPluginDependency(Path libPath, Artifact depArtifact) {
+        Path depArtifactPath = depArtifact.getPath();
+        Path depPluginPath = libPath.resolve(depArtifactPath.getFileName());
+        try {
+            Files.copy(depArtifactPath, depPluginPath, StandardCopyOption.REPLACE_EXISTING);
+            log.info("Dependency '{}' copied to '{}'", depArtifact, depPluginPath);
+        } catch (IOException e) {
+            throw new PluginRuntimeException("Cannot copy plugin dependency artifact", e);
+        }
     }
 
 }

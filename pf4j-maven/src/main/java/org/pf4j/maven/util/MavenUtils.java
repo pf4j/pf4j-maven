@@ -33,6 +33,7 @@ import org.eclipse.aether.resolution.ArtifactResult;
 import org.eclipse.aether.supplier.RepositorySystemSupplier;
 import org.eclipse.aether.supplier.SessionBuilderSupplier;
 import org.eclipse.aether.util.graph.visitor.DependencyGraphDumper;
+import org.slf4j.Logger;
 
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -40,7 +41,10 @@ import java.util.List;
 
 public class MavenUtils {
 
+    private static final Logger log = org.slf4j.LoggerFactory.getLogger(MavenUtils.class);
+
     public static final DependencyVisitor DUMPER_SOUT = new DependencyGraphDumper(System.out::println);
+    public static final DependencyVisitor DUMPER_LOG = new DependencyGraphDumper(log::debug);
 
     private MavenUtils() {
         // utility class
@@ -59,8 +63,10 @@ public class MavenUtils {
     }
 
     public static ArtifactResult resolvePlugin(String plugin, RepositorySystem system, RepositorySystemSession.CloseableSession session) throws ArtifactResolutionException {
-        Artifact artifact = new DefaultArtifact(plugin);
+        return resolveArtifact(new DefaultArtifact(plugin), system, session);
+    }
 
+    public static ArtifactResult resolveArtifact(Artifact artifact, RepositorySystem system, RepositorySystemSession.CloseableSession session) throws ArtifactResolutionException {
         ArtifactRequest artifactRequest = new ArtifactRequest();
         artifactRequest.setArtifact(artifact);
         artifactRequest.setRepositories(getRepositories());
@@ -88,7 +94,7 @@ public class MavenUtils {
     public static List<RemoteRepository> getRepositories() {
         List<RemoteRepository> repositories = new ArrayList<>();
         repositories.add(localRepository());
-//        repositories.add(centralRepository());
+        repositories.add(centralRepository());
 
         return repositories;
     }
