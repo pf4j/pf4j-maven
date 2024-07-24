@@ -17,7 +17,6 @@
 
     <properties>
         <maven.resolver.version>2.0.0</maven.resolver.version>
-        <maven.version>3.9.8</maven.version>
     </properties>
 
     <dependencies>
@@ -51,17 +50,6 @@
             <groupId>org.apache.maven.resolver</groupId>
             <artifactId>maven-resolver-transport-jdk</artifactId>
             <version>${maven.resolver.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.apache.maven</groupId>
-            <artifactId>maven-artifact</artifactId>
-            <version>${maven.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.maven</groupId>
-            <artifactId>maven-model</artifactId>
-            <version>${maven.version}</version>
         </dependency>
     </dependencies>
 
