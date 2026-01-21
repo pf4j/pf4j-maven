@@ -58,7 +58,7 @@
 
     <modules>
         <module>pf4j-maven</module>
-        <module>demo</module>
+        <module>demo/maven</module>
     </modules>
 
 </project>
