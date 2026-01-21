@@ -21,6 +21,7 @@ import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.collection.CollectResult;
 import org.eclipse.aether.collection.DependencyCollectionException;
 import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.graph.DependencyNode;
 import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
@@ -136,10 +137,14 @@ public class MavenPluginManager extends DefaultPluginManager {
     }
 
     private static void copyDependencies(CollectResult collectResult, RepositorySystem system, RepositorySystemSession.CloseableSession session, Path libPath) {
-        collectResult.getRoot().getChildren().forEach(node -> {
-            Dependency dependency = node.getDependency();
-            if (dependency.getScope().equals("provided")) {
-                return;
+        processDependencyNode(collectResult.getRoot(), system, session, libPath);
+    }
+
+    private static void processDependencyNode(DependencyNode node, RepositorySystem system, RepositorySystemSession.CloseableSession session, Path libPath) {
+        for (DependencyNode child : node.getChildren()) {
+            Dependency dependency = child.getDependency();
+            if ("provided".equals(dependency.getScope()) || "test".equals(dependency.getScope())) {
+                continue;
             }
 
             Artifact depArtifact = dependency.getArtifact();
@@ -151,11 +156,14 @@ public class MavenPluginManager extends DefaultPluginManager {
                 log.info("Dependency '{}' resolved to  '{}'", depArtifact, depArtifact.getPath());
             } catch (ArtifactResolutionException e) {
                 log.error(e.getMessage(), e);
-                return;
+                continue;
             }
 
             copyPluginDependency(libPath, depArtifact);
-        });
+
+            // process transitive dependencies recursively
+            processDependencyNode(child, system, session, libPath);
+        }
     }
 
     private static void copyPluginDependency(Path libPath, Artifact depArtifact) {
