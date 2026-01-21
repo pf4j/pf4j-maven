@@ -41,7 +41,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 public class MavenPluginManager extends DefaultPluginManager {
@@ -127,9 +126,14 @@ public class MavenPluginManager extends DefaultPluginManager {
     }
 
     private static void copyPluginArtifact(Artifact artifact, Path pluginPath) {
+        Path artifactPath = artifact.getPath();
+        Path targetPath = pluginPath.resolve(artifactPath.getFileName());
+        if (Files.exists(targetPath)) {
+            log.debug("Plugin artifact already exists at '{}'", targetPath);
+            return;
+        }
         try {
-            Path artifactPath = artifact.getPath();
-            Files.copy(artifactPath, pluginPath.resolve(artifactPath.getFileName()), StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(artifactPath, targetPath);
             log.info("Plugin artifact copied to '{}'", pluginPath);
         } catch (IOException e) {
             throw new PluginRuntimeException("Cannot copy plugin artifact", e);
@@ -168,10 +172,14 @@ public class MavenPluginManager extends DefaultPluginManager {
 
     private static void copyPluginDependency(Path libPath, Artifact depArtifact) {
         Path depArtifactPath = depArtifact.getPath();
-        Path depPluginPath = libPath.resolve(depArtifactPath.getFileName());
+        Path targetPath = libPath.resolve(depArtifactPath.getFileName());
+        if (Files.exists(targetPath)) {
+            log.debug("Dependency '{}' already exists at '{}'", depArtifact, targetPath);
+            return;
+        }
         try {
-            Files.copy(depArtifactPath, depPluginPath, StandardCopyOption.REPLACE_EXISTING);
-            log.info("Dependency '{}' copied to '{}'", depArtifact, depPluginPath);
+            Files.copy(depArtifactPath, targetPath);
+            log.info("Dependency '{}' copied to '{}'", depArtifact, targetPath);
         } catch (IOException e) {
             throw new PluginRuntimeException("Cannot copy plugin dependency artifact", e);
         }
