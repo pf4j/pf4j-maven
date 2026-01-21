@@ -29,21 +29,6 @@ my-plugin.jar!/META-INF/MANIFEST.MF:
 
 Dependencies are declared in the plugin itself. Plugin is self-contained.
 
-## Flow
-
-```
-1. User places plugin.jar in plugins/
-2. loadPlugins() scans plugins/ for JARs
-3. For each JAR:
-   a. Read MANIFEST
-   b. If Maven-Dependencies present:
-      - Parse coordinates
-      - Resolve from Maven repos
-      - Copy to plugins/<plugin-id>/lib/
-   c. Move JAR to plugins/<plugin-id>/
-4. Standard PF4J loading continues
-```
-
 ## MANIFEST Format
 
 ```
@@ -55,25 +40,12 @@ Or with explicit scope:
 Maven-Dependencies: commons-lang:commons-lang:2.6:compile, slf4j-api:slf4j-api:2.0.0:provided
 ```
 
-Multiple lines (if needed):
-```
-Maven-Dependencies: commons-lang:commons-lang:2.6
-Maven-Dependencies: com.google.guava:guava:32.0
-```
-
-## Questions to Resolve
+## Decisions
 
 ### 1. Directory structure
 
-**Option A:** Flat with convention
-```
-plugins/
-  my-plugin.jar
-  my-plugin.lib/
-    commons-lang-2.6.jar
-```
+**Decision: Subdirectory (folder per plugin)**
 
-**Option B:** Subdirectory (current approach)
 ```
 plugins/
   my-plugin/
@@ -82,44 +54,87 @@ plugins/
       commons-lang-2.6.jar
 ```
 
-Option B is more consistent with existing PF4J ZIP structure.
+Rationale:
+- Consistent with existing PF4J ZIP structure
+- One plugin = one folder (easy to inspect, delete, move)
+- Works with existing `MavenPluginClasspath`
 
-### 2. What if plugin already has lib/?
+Future: Code structured to allow alternative layouts via strategy pattern if needed.
 
-If user places a plugin with pre-bundled dependencies:
-- Skip Maven resolution entirely?
-- Merge with resolved dependencies?
-- Fail with error?
+### 2. Plugin with existing lib/
 
-Recommendation: Skip resolution if `lib/` already exists and is non-empty.
+**Decision: Skip Maven resolution**
 
-### 3. Backward compatibility
+If `lib/` exists and is non-empty, skip dependency resolution entirely.
+
+```java
+if (Files.exists(libPath) && !isEmpty(libPath)) {
+    log.debug("lib/ exists, skipping Maven resolution");
+    return;
+}
+```
+
+Rationale:
+- KISS - simple, predictable behavior
+- Respects user intent (pre-bundled = knows what they're doing)
+- Avoids version conflicts between pre-bundled and resolved
+
+### 3. plugins.txt coexistence
+
+**Decision: Support both mechanisms**
+
+1. Scan `plugins/` for JARs with `Maven-Dependencies` in MANIFEST → resolve dependencies
+2. Read `plugins.txt` (if exists) → download plugin + resolve dependencies from POM
+3. Standard PF4J loading
+
+Rationale:
+- Demo/development works with plugins.txt (existing flow)
+- Production can use MANIFEST approach (self-contained plugins)
+- Community can provide feedback on preferred approach
+
+### 4. Backward compatibility
 
 Plugins without `Maven-Dependencies`:
 - Load normally (standard PF4J behavior)
 - No Maven resolution attempted
 
-### 4. plugins.txt coexistence
+## Flow
 
-Options:
-- **Remove entirely** - convention only (scan plugins/)
-- **Keep as optional bootstrap** - for downloading plugins initially
-- **Both mechanisms** - plugins.txt OR JAR with MANIFEST
-
-Recommendation: Start with convention only. Add plugins.txt back if needed.
+```
+loadPlugins():
+  │
+  ├─► Scan plugins/ for JAR files
+  │     │
+  │     └─► For each JAR with Maven-Dependencies in MANIFEST:
+  │           - Create plugins/<plugin-id>/
+  │           - Move JAR to plugins/<plugin-id>/
+  │           - If lib/ empty: resolve and copy dependencies
+  │
+  ├─► Read plugins.txt (if exists)
+  │     │
+  │     └─► For each coordinate:
+  │           - Download plugin JAR
+  │           - Create plugins/<artifactId>/
+  │           - Resolve and copy dependencies
+  │
+  └─► Standard PF4J loading
+```
 
 ## Implementation Steps
 
-1. Modify `loadPlugins()` to scan `plugins/` for JAR files
+1. Add method to scan `plugins/` for loose JAR files
 2. Add MANIFEST reading for `Maven-Dependencies` attribute
-3. Parse coordinates and resolve dependencies
-4. Reorganize into `plugins/<plugin-id>/` structure
-5. Remove `plugins.txt` requirement
+3. Parse coordinates (comma-separated `groupId:artifactId:version`)
+4. Reorganize JAR into `plugins/<plugin-id>/` structure
+5. Skip resolution if `lib/` already exists and non-empty
+6. Keep `plugins.txt` support (existing code)
+7. Document both mechanisms
 
 ## Benefits
 
 - Plugin is self-contained (one JAR to distribute)
-- No external configuration needed
+- No external configuration needed for MANIFEST approach
+- Backward compatible with plugins.txt
 - Works with any distribution mechanism (copy, pf4j-update, etc.)
 - Clear ownership: plugin declares its own dependencies
 
