@@ -35,6 +35,7 @@ import org.eclipse.aether.supplier.SessionBuilderSupplier;
 import org.eclipse.aether.util.graph.visitor.DependencyGraphDumper;
 import org.slf4j.Logger;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,9 +56,10 @@ public class MavenUtils {
     }
 
     public static RepositorySystemSession.SessionBuilder getRepositorySystemSession(RepositorySystem system) {
+        Path m2Repo = Paths.get(System.getProperty("user.home"), ".m2", "repository");
         return new SessionBuilderSupplier(system)
                 .get()
-                .withLocalRepositoryBaseDirectories(Paths.get("local-repo"))
+                .withLocalRepositoryBaseDirectories(m2Repo, Paths.get("local-repo"))
                 .setRepositoryListener(new ConsoleRepositoryListener())
                 .setTransferListener(new ConsoleTransferListener());
     }
@@ -93,17 +95,9 @@ public class MavenUtils {
 
     public static List<RemoteRepository> getRepositories() {
         List<RemoteRepository> repositories = new ArrayList<>();
-        repositories.add(localRepository());
         repositories.add(centralRepository());
 
         return repositories;
-    }
-
-    public static RemoteRepository localRepository() {
-        String userHome = System.getProperty("user.home");
-        String mavenRepoPath = "file://" + userHome + "/.m2/repository";
-
-        return new RemoteRepository.Builder("local", "default", mavenRepoPath).build();
     }
 
     public static RemoteRepository centralRepository() {
