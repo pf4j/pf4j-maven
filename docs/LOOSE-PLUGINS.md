@@ -1,6 +1,6 @@
-# Proposal: Maven Dependencies in MANIFEST
+# Proposal: Loose Plugin JARs with Embedded POM
 
-Move dependency declaration from external `plugins.txt` to the plugin's MANIFEST.
+Move dependency declaration from external `plugins.txt` to the plugin's embedded pom.xml.
 
 ## Current State
 
@@ -14,31 +14,27 @@ plugins/
 
 Dependencies are resolved based on external file. Plugin JAR must be fetched first.
 
-## Proposed State
+## Implemented State
 
 ```
 plugins/
   my-plugin.jar    # User places JAR here
 
-my-plugin.jar!/META-INF/MANIFEST.MF:
-  Plugin-Id: my-plugin
-  Plugin-Class: com.example.MyPlugin
-  Plugin-Version: 1.0.0
-  Maven-Dependencies: commons-lang:commons-lang:2.6, com.google.guava:guava:32.0
+my-plugin.jar!/META-INF/maven/<groupId>/<artifactId>/pom.xml:
+  <dependencies>
+    <dependency>
+      <groupId>commons-lang</groupId>
+      <artifactId>commons-lang</artifactId>
+      <version>2.6</version>
+    </dependency>
+  </dependencies>
 ```
 
-Dependencies are declared in the plugin itself. Plugin is self-contained.
+Dependencies are read from the embedded pom.xml (standard Maven artifact structure). Plugin is self-contained.
 
-## MANIFEST Format
+## Why pom.xml Instead of MANIFEST Attribute?
 
-```
-Maven-Dependencies: groupId:artifactId:version, groupId:artifactId:version
-```
-
-Or with explicit scope:
-```
-Maven-Dependencies: commons-lang:commons-lang:2.6:compile, slf4j-api:slf4j-api:2.0.0:provided
-```
+**DRY principle**: The pom.xml is already embedded in every Maven-built JAR. No need to duplicate dependency information in MANIFEST.
 
 ## Decisions
 
@@ -83,18 +79,18 @@ Rationale:
 
 **Decision: Support both mechanisms**
 
-1. Scan `plugins/` for JARs with `Maven-Dependencies` in MANIFEST → resolve dependencies
+1. Scan `plugins/` for JARs with embedded pom.xml → resolve dependencies
 2. Read `plugins.txt` (if exists) → download plugin + resolve dependencies from POM
 3. Standard PF4J loading
 
 Rationale:
 - Demo/development works with plugins.txt (existing flow)
-- Production can use MANIFEST approach (self-contained plugins)
+- Production can use loose JAR approach (self-contained plugins)
 - Community can provide feedback on preferred approach
 
 ### 4. Backward compatibility
 
-Plugins without `Maven-Dependencies`:
+Plugins without embedded pom.xml (or with empty dependencies):
 - Load normally (standard PF4J behavior)
 - No Maven resolution attempted
 
@@ -103,9 +99,10 @@ Plugins without `Maven-Dependencies`:
 ```
 loadPlugins():
   │
-  ├─► Scan plugins/ for JAR files
+  ├─► Scan plugins/ for loose JAR files
   │     │
-  │     └─► For each JAR with Maven-Dependencies in MANIFEST:
+  │     └─► For each JAR with pom.xml in META-INF/maven/:
+  │           - Read dependencies from pom.xml
   │           - Create plugins/<plugin-id>/
   │           - Move JAR to plugins/<plugin-id>/
   │           - If lib/ empty: resolve and copy dependencies
@@ -120,15 +117,15 @@ loadPlugins():
   └─► Standard PF4J loading
 ```
 
-## Implementation Steps
+## Implementation (Done)
 
-1. Add method to scan `plugins/` for loose JAR files
-2. Add MANIFEST reading for `Maven-Dependencies` attribute
-3. Parse coordinates (comma-separated `groupId:artifactId:version`)
-4. Reorganize JAR into `plugins/<plugin-id>/` structure
-5. Skip resolution if `lib/` already exists and non-empty
-6. Keep `plugins.txt` support (existing code)
-7. Document both mechanisms
+1. ✓ Scan `plugins/` for loose JAR files (`findLooseJars()`)
+2. ✓ Read pom.xml from JAR (`readPomFromJar()` using MavenXpp3Reader)
+3. ✓ Extract dependencies from Maven Model
+4. ✓ Reorganize JAR into `plugins/<plugin-id>/` structure
+5. ✓ Skip resolution if `lib/` already exists and non-empty
+6. ✓ Keep `plugins.txt` support (existing code)
+7. ✓ Document both mechanisms
 
 ## Benefits
 
