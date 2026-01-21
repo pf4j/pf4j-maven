@@ -351,12 +351,12 @@ public class MavenPluginManager extends DefaultPluginManager {
         }
     }
 
-    private static void copyDependencies(CollectResult collectResult, RepositorySystem system,
+    private void copyDependencies(CollectResult collectResult, RepositorySystem system,
             RepositorySystemSession.CloseableSession session, Path libPath, List<RemoteRepository> repositories) {
         processDependencyNode(collectResult.getRoot(), system, session, libPath, repositories);
     }
 
-    private static void processDependencyNode(DependencyNode node, RepositorySystem system,
+    private void processDependencyNode(DependencyNode node, RepositorySystem system,
             RepositorySystemSession.CloseableSession session, Path libPath, List<RemoteRepository> repositories) {
         for (DependencyNode child : node.getChildren()) {
             Dependency dependency = child.getDependency();
@@ -376,10 +376,69 @@ public class MavenPluginManager extends DefaultPluginManager {
                 continue;
             }
 
-            copyPluginDependency(libPath, depArtifact);
+            // Check if the dependency is a PF4J plugin
+            String pluginId = readPluginIdFromJar(depArtifact.getPath());
+            if (pluginId != null) {
+                // It's a plugin - install as separate plugin instead of in lib/
+                log.info("Dependency '{}' is a PF4J plugin (id={}), installing as separate plugin", depArtifact, pluginId);
+                installPluginDependency(depArtifact, pluginId, system, session, repositories);
+            } else {
+                // Regular library - copy to lib/
+                copyPluginDependency(libPath, depArtifact);
+            }
 
             // process transitive dependencies recursively
             processDependencyNode(child, system, session, libPath, repositories);
+        }
+    }
+
+    private String readPluginIdFromJar(Path jarPath) {
+        try (JarFile jarFile = new JarFile(jarPath.toFile())) {
+            Manifest manifest = jarFile.getManifest();
+            if (manifest == null) {
+                return null;
+            }
+            return manifest.getMainAttributes().getValue("Plugin-Id");
+        } catch (IOException e) {
+            log.debug("Cannot read MANIFEST from '{}'", jarPath, e);
+            return null;
+        }
+    }
+
+    private void installPluginDependency(Artifact artifact, String pluginId,
+            RepositorySystem system, RepositorySystemSession.CloseableSession session,
+            List<RemoteRepository> repositories) {
+        Path pluginDir = getPluginsRoot().resolve(pluginId);
+
+        // Skip if plugin already installed
+        if (Files.exists(pluginDir) && hasJarFiles(pluginDir)) {
+            log.debug("Plugin '{}' already installed at '{}'", pluginId, pluginDir);
+            return;
+        }
+
+        // Create plugin directory and copy artifact
+        createPluginDirectory(pluginDir);
+        copyPluginArtifact(artifact, pluginDir);
+
+        // Create lib directory and resolve dependencies for this plugin too
+        Path libPath = pluginDir.resolve("lib");
+        createPluginLibDirectory(libPath);
+
+        // Recursively resolve dependencies of this plugin dependency
+        String coords = artifact.getGroupId() + ":" + artifact.getArtifactId() + ":" + artifact.getVersion();
+        try {
+            CollectResult collectResult = MavenUtils.collectDependencies(coords, system, session, repositories);
+            copyDependencies(collectResult, system, session, libPath, repositories);
+        } catch (Exception e) {
+            log.warn("Cannot resolve dependencies for plugin '{}': {}", pluginId, e.getMessage());
+        }
+    }
+
+    private boolean hasJarFiles(Path directory) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*.jar")) {
+            return stream.iterator().hasNext();
+        } catch (IOException e) {
+            return false;
         }
     }
 
