@@ -5,5 +5,5 @@ target/
 .idea/
 *.iml
 demo-dist/
-/demo/maven/app/local-repo/
-/demo/maven/app/plugins/
+/demo/app/local-repo/
+/demo/app/plugins/
