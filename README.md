@@ -88,11 +88,15 @@ org.pf4j.demo:pf4j-maven-demo-plugin1:jar:plugin:1.0.0-SNAPSHOT
 
 ## Demo
 
+A working demo is available in the [demo](demo) folder.
+
+**Quick run:**
 ```bash
-./run-demo.sh
+./run-demo.sh      # Linux/Mac
+run-demo.bat       # Windows
 ```
 
-Output:
+**Output:**
 ```
 >>> Whazzup
 >>> Welcome
@@ -103,10 +107,11 @@ Output:
 ```
 pf4j-maven/          # Core library
   MavenPluginManager
+  MavenPluginManagerBuilder
   MavenPluginLoader
   MavenUtils
 
-demo/maven/
+demo/
   app/               # Demo application
   api/               # Shared plugin API
   plugins/           # Demo plugins
