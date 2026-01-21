@@ -54,6 +54,22 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
 
+/**
+ * A PF4J plugin manager that resolves plugin dependencies from Maven repositories.
+ * <p>
+ * Supports two mechanisms for loading plugins:
+ * <ul>
+ *   <li><b>Loose JAR files</b> - Place plugin JARs directly in plugins directory.
+ *       Dependencies are read from embedded pom.xml (META-INF/maven/.../pom.xml)</li>
+ *   <li><b>plugins.txt</b> - List Maven coordinates in plugins.txt file.
+ *       Plugin and dependencies are downloaded from Maven repositories</li>
+ * </ul>
+ * <p>
+ * Resolved dependencies are copied to {@code plugins/<plugin-id>/lib/}.
+ * If lib/ already exists and is non-empty, dependency resolution is skipped.
+ *
+ * @see <a href="https://github.com/pf4j/pf4j/issues/208">PF4J Issue #208</a>
+ */
 public class MavenPluginManager extends DefaultPluginManager {
 
     private static final Logger log = LoggerFactory.getLogger(MavenPluginManager.class);
@@ -161,6 +177,12 @@ public class MavenPluginManager extends DefaultPluginManager {
         }
     }
 
+    /**
+     * Reads plugin Maven coordinates from plugins.txt file.
+     * Override to customize plugin source (e.g., read from database or remote config).
+     *
+     * @return list of Maven coordinates (groupId:artifactId:version or full GAV)
+     */
     protected List<String> readPlugins() {
         Path pluginsTxt = Paths.get("plugins.txt");
         if (!Files.exists(pluginsTxt)) {

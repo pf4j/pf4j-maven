@@ -18,6 +18,10 @@ package org.pf4j.maven;
 import org.pf4j.DefaultPluginClasspath;
 import org.pf4j.PluginClasspath;
 
+/**
+ * Classpath configuration for Maven-resolved plugins.
+ * Loads JARs from the plugin directory root (.) and lib/ subdirectory.
+ */
 public class MavenPluginClasspath extends PluginClasspath {
 
     public MavenPluginClasspath() {

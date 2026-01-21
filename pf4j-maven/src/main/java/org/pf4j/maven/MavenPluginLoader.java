@@ -18,6 +18,10 @@ package org.pf4j.maven;
 import org.pf4j.BasePluginLoader;
 import org.pf4j.PluginManager;
 
+/**
+ * Plugin loader for Maven-resolved plugins.
+ * Uses {@link MavenPluginClasspath} to load JARs from plugin directory and lib/ subdirectory.
+ */
 public class MavenPluginLoader extends BasePluginLoader {
 
     public MavenPluginLoader(PluginManager pluginManager) {

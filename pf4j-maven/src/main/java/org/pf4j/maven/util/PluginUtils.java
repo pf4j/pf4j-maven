@@ -22,14 +22,23 @@ import java.io.File;
 import java.io.FileFilter;
 import java.nio.file.Path;
 
+/**
+ * Utility methods for plugin file operations.
+ */
 public class PluginUtils {
 
     private PluginUtils() {
         // utility class
     }
 
+    /**
+     * Finds the first JAR file in the plugin directory.
+     *
+     * @param pluginPath plugin directory path
+     * @return path to the plugin JAR
+     * @throws PluginRuntimeException if no JAR found
+     */
     public static Path getPluginJarPath(Path pluginPath) {
-        // get jar file from plugin path
         FileFilter jarFilter = new JarFileFilter();
         File[] files = pluginPath.toFile().listFiles(jarFilter);
         if (files == null || files.length == 0) {

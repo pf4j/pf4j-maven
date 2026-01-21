@@ -21,6 +21,10 @@ import org.pf4j.maven.util.PluginUtils;
 import java.nio.file.Path;
 import java.util.jar.Manifest;
 
+/**
+ * Reads plugin descriptor from MANIFEST.MF inside the plugin JAR.
+ * Adapts {@link ManifestPluginDescriptorFinder} for Maven plugin directory structure.
+ */
 public class MavenManifestPluginDescriptorFinder extends ManifestPluginDescriptorFinder {
 
     @Override

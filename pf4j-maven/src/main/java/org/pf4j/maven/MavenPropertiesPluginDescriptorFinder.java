@@ -23,6 +23,10 @@ import org.pf4j.util.FileUtils;
 import java.io.IOException;
 import java.nio.file.Path;
 
+/**
+ * Reads plugin descriptor from plugin.properties file inside the plugin JAR.
+ * Adapts {@link PropertiesPluginDescriptorFinder} for Maven plugin directory structure.
+ */
 public class MavenPropertiesPluginDescriptorFinder extends PropertiesPluginDescriptorFinder {
 
     @Override
