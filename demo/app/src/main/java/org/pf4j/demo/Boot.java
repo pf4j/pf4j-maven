@@ -39,6 +39,12 @@ public class Boot {
         printLogo();
 
         // create the plugin manager
+        // Option 1: Use builder directly (recommended)
+        // PluginManager pluginManager = MavenPluginManagerBuilder.create()
+        //     .pluginsRoot(Paths.get("plugins"))
+        //     .build();
+
+        // Option 2: Extend MavenPluginManager for customization
         PluginManager pluginManager = new DemoPluginManager();
 
         // load the plugins

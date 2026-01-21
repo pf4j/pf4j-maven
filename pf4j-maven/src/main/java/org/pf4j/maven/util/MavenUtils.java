@@ -65,14 +65,17 @@ public class MavenUtils {
     }
 
     /**
-     * Creates a session builder configured with local repository (~/.m2/repository)
+     * Creates a session builder configured with the specified local repository
      * and console listeners for transfer/repository events.
+     *
+     * @param system the repository system
+     * @param localRepository the local repository path
+     * @return a configured session builder
      */
-    public static RepositorySystemSession.SessionBuilder getRepositorySystemSession(RepositorySystem system) {
-        Path m2Repo = Paths.get(System.getProperty("user.home"), ".m2", "repository");
+    public static RepositorySystemSession.SessionBuilder getRepositorySystemSession(RepositorySystem system, Path localRepository) {
         return new SessionBuilderSupplier(system)
                 .get()
-                .withLocalRepositoryBaseDirectories(m2Repo, Paths.get("local-repo"))
+                .withLocalRepositoryBaseDirectories(localRepository)
                 .setRepositoryListener(new ConsoleRepositoryListener())
                 .setTransferListener(new ConsoleTransferListener());
     }
@@ -81,18 +84,32 @@ public class MavenUtils {
      * Resolves a plugin artifact from Maven coordinates.
      *
      * @param plugin Maven coordinates (e.g., "groupId:artifactId:version")
+     * @param system the repository system
+     * @param session the repository session
+     * @param repositories the remote repositories to use
+     * @return the resolved artifact result
      */
-    public static ArtifactResult resolvePlugin(String plugin, RepositorySystem system, RepositorySystemSession.CloseableSession session) throws ArtifactResolutionException {
-        return resolveArtifact(new DefaultArtifact(plugin), system, session);
+    public static ArtifactResult resolvePlugin(String plugin, RepositorySystem system,
+            RepositorySystemSession.CloseableSession session, List<RemoteRepository> repositories)
+            throws ArtifactResolutionException {
+        return resolveArtifact(new DefaultArtifact(plugin), system, session, repositories);
     }
 
     /**
-     * Resolves an artifact from local repository or Maven Central.
+     * Resolves an artifact from local repository or remote repositories.
+     *
+     * @param artifact the artifact to resolve
+     * @param system the repository system
+     * @param session the repository session
+     * @param repositories the remote repositories to use
+     * @return the resolved artifact result
      */
-    public static ArtifactResult resolveArtifact(Artifact artifact, RepositorySystem system, RepositorySystemSession.CloseableSession session) throws ArtifactResolutionException {
+    public static ArtifactResult resolveArtifact(Artifact artifact, RepositorySystem system,
+            RepositorySystemSession.CloseableSession session, List<RemoteRepository> repositories)
+            throws ArtifactResolutionException {
         ArtifactRequest artifactRequest = new ArtifactRequest();
         artifactRequest.setArtifact(artifact);
-        artifactRequest.setRepositories(getRepositories());
+        artifactRequest.setRepositories(repositories);
 
         return system.resolveArtifact(session, artifactRequest);
     }
@@ -101,21 +118,26 @@ public class MavenUtils {
      * Collects transitive dependencies for a plugin artifact.
      *
      * @param plugin Maven coordinates (e.g., "groupId:artifactId:version")
+     * @param system the repository system
+     * @param session the repository session
+     * @param repositories the remote repositories to use
      * @return dependency tree rooted at the plugin artifact
      */
-    public static CollectResult collectDependencies(String plugin, RepositorySystem system, RepositorySystemSession.CloseableSession session) throws ArtifactDescriptorException, DependencyCollectionException {
+    public static CollectResult collectDependencies(String plugin, RepositorySystem system,
+            RepositorySystemSession.CloseableSession session, List<RemoteRepository> repositories)
+            throws ArtifactDescriptorException, DependencyCollectionException {
         Artifact artifact = new DefaultArtifact(plugin);
 
         ArtifactDescriptorRequest descriptorRequest = new ArtifactDescriptorRequest();
         descriptorRequest.setArtifact(artifact);
-        descriptorRequest.setRepositories(getRepositories());
+        descriptorRequest.setRepositories(repositories);
         ArtifactDescriptorResult descriptorResult = system.readArtifactDescriptor(session, descriptorRequest);
 
         CollectRequest collectRequest = new CollectRequest();
         collectRequest.setRootArtifact(descriptorResult.getArtifact());
         collectRequest.setDependencies(descriptorResult.getDependencies());
         collectRequest.setManagedDependencies(descriptorResult.getManagedDependencies());
-        collectRequest.setRepositories(descriptorRequest.getRepositories());
+        collectRequest.setRepositories(repositories);
 
         return system.collectDependencies(session, collectRequest);
     }

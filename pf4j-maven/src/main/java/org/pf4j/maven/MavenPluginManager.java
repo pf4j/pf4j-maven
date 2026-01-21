@@ -21,6 +21,7 @@ import org.codehaus.plexus.util.xml.pull.XmlPullParserException;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.collection.CollectResult;
 import org.eclipse.aether.collection.DependencyCollectionException;
 import org.eclipse.aether.graph.Dependency;
@@ -74,6 +75,34 @@ public class MavenPluginManager extends DefaultPluginManager {
 
     private static final Logger log = LoggerFactory.getLogger(MavenPluginManager.class);
 
+    private final Path localRepository;
+    private final List<RemoteRepository> remoteRepositories;
+    private final Path pluginsTxtPath;
+    private final boolean processLooseJars;
+    private final boolean skipExistingDependencies;
+
+    /**
+     * Creates a MavenPluginManager from builder configuration.
+     *
+     * @param builder the builder with configuration
+     */
+    MavenPluginManager(MavenPluginManagerBuilder builder) {
+        super(builder.getPluginsRoot());
+        this.localRepository = builder.getLocalRepository();
+        this.remoteRepositories = builder.getRemoteRepositories();
+        this.pluginsTxtPath = builder.getPluginsTxtPath();
+        this.processLooseJars = builder.isProcessLooseJars();
+        this.skipExistingDependencies = builder.isSkipExistingDependencies();
+    }
+
+    /**
+     * Creates a MavenPluginManager with default configuration.
+     * Protected constructor for subclasses that need to extend MavenPluginManager.
+     */
+    protected MavenPluginManager() {
+        this(MavenPluginManagerBuilder.create());
+    }
+
     @Override
     protected PluginLoader createPluginLoader() {
         return new CompoundPluginLoader()
@@ -91,9 +120,11 @@ public class MavenPluginManager extends DefaultPluginManager {
     @Override
     public void loadPlugins() {
         try (RepositorySystem system = MavenUtils.getRepositorySystem()) {
-            try (RepositorySystemSession.CloseableSession session = MavenUtils.getRepositorySystemSession(system).build()) {
+            try (RepositorySystemSession.CloseableSession session = MavenUtils.getRepositorySystemSession(system, localRepository).build()) {
                 // 1. Process loose JAR files with Maven-Dependencies in MANIFEST
-                processLoosePlugins(system, session);
+                if (processLooseJars) {
+                    processLoosePlugins(system, session);
+                }
 
                 // 2. Process plugins.txt (if exists)
                 processPluginsTxt(system, session);
@@ -137,7 +168,7 @@ public class MavenPluginManager extends DefaultPluginManager {
 
             // Create lib directory and resolve dependencies
             Path libPath = pluginDir.resolve("lib");
-            if (hasExistingDependencies(libPath)) {
+            if (skipExistingDependencies && hasExistingDependencies(libPath)) {
                 log.info("lib/ exists and non-empty for '{}', skipping dependency resolution", pluginId);
                 continue;
             }
@@ -153,11 +184,11 @@ public class MavenPluginManager extends DefaultPluginManager {
             log.info("Resolving plugin '{}'", plugin);
 
             try {
-                ArtifactResult result = MavenUtils.resolvePlugin(plugin, system, session);
+                ArtifactResult result = MavenUtils.resolvePlugin(plugin, system, session, remoteRepositories);
                 Artifact artifact = result.getArtifact();
                 log.info("'{}' resolved to  '{}'", artifact, artifact.getPath());
 
-                CollectResult collectResult = MavenUtils.collectDependencies(plugin, system, session);
+                CollectResult collectResult = MavenUtils.collectDependencies(plugin, system, session, remoteRepositories);
                 collectResult.getRoot().accept(MavenUtils.DUMPER_LOG);
 
                 // create plugin directory and copy the plugin artifact
@@ -170,7 +201,7 @@ public class MavenPluginManager extends DefaultPluginManager {
                 createPluginLibDirectory(libPath);
 
                 // copy dependencies to plugin 'lib' directory
-                copyDependencies(collectResult, system, session, libPath);
+                copyDependencies(collectResult, system, session, libPath, remoteRepositories);
             } catch (ArtifactResolutionException | ArtifactDescriptorException | DependencyCollectionException e) {
                 log.error("Cannot resolve plugin '{}'", plugin, e);
             }
@@ -184,15 +215,14 @@ public class MavenPluginManager extends DefaultPluginManager {
      * @return list of Maven coordinates (groupId:artifactId:version or full GAV)
      */
     protected List<String> readPlugins() {
-        Path pluginsTxt = Paths.get("plugins.txt");
-        if (!Files.exists(pluginsTxt)) {
-            log.debug("plugins.txt not found, skipping");
+        if (!Files.exists(pluginsTxtPath)) {
+            log.debug("'{}' not found, skipping", pluginsTxtPath);
             return Collections.emptyList();
         }
         try {
-            return FileUtils.readLines(pluginsTxt, true);
+            return FileUtils.readLines(pluginsTxtPath, true);
         } catch (IOException e) {
-            throw new PluginRuntimeException("Cannot read plugins.txt", e);
+            throw new PluginRuntimeException("Cannot read " + pluginsTxtPath, e);
         }
     }
 
@@ -278,7 +308,7 @@ public class MavenPluginManager extends DefaultPluginManager {
             String coord = dep.getGroupId() + ":" + dep.getArtifactId() + ":" + dep.getVersion();
             try {
                 Artifact artifact = new org.eclipse.aether.artifact.DefaultArtifact(coord);
-                ArtifactResult result = MavenUtils.resolveArtifact(artifact, system, session);
+                ArtifactResult result = MavenUtils.resolveArtifact(artifact, system, session, remoteRepositories);
                 Artifact resolved = result.getArtifact();
                 log.info("Dependency '{}' resolved to '{}'", coord, resolved.getPath());
                 copyPluginDependency(libPath, resolved);
@@ -321,11 +351,13 @@ public class MavenPluginManager extends DefaultPluginManager {
         }
     }
 
-    private static void copyDependencies(CollectResult collectResult, RepositorySystem system, RepositorySystemSession.CloseableSession session, Path libPath) {
-        processDependencyNode(collectResult.getRoot(), system, session, libPath);
+    private static void copyDependencies(CollectResult collectResult, RepositorySystem system,
+            RepositorySystemSession.CloseableSession session, Path libPath, List<RemoteRepository> repositories) {
+        processDependencyNode(collectResult.getRoot(), system, session, libPath, repositories);
     }
 
-    private static void processDependencyNode(DependencyNode node, RepositorySystem system, RepositorySystemSession.CloseableSession session, Path libPath) {
+    private static void processDependencyNode(DependencyNode node, RepositorySystem system,
+            RepositorySystemSession.CloseableSession session, Path libPath, List<RemoteRepository> repositories) {
         for (DependencyNode child : node.getChildren()) {
             Dependency dependency = child.getDependency();
             if ("provided".equals(dependency.getScope()) || "test".equals(dependency.getScope())) {
@@ -336,7 +368,7 @@ public class MavenPluginManager extends DefaultPluginManager {
 
             // resolve dependency artifact
             try {
-                ArtifactResult depResult = MavenUtils.resolveArtifact(depArtifact, system, session);
+                ArtifactResult depResult = MavenUtils.resolveArtifact(depArtifact, system, session, repositories);
                 depArtifact = depResult.getArtifact();
                 log.info("Dependency '{}' resolved to  '{}'", depArtifact, depArtifact.getPath());
             } catch (ArtifactResolutionException e) {
@@ -347,7 +379,7 @@ public class MavenPluginManager extends DefaultPluginManager {
             copyPluginDependency(libPath, depArtifact);
 
             // process transitive dependencies recursively
-            processDependencyNode(child, system, session, libPath);
+            processDependencyNode(child, system, session, libPath, repositories);
         }
     }
 

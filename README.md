@@ -38,15 +38,45 @@ plugins.txt:
 
 ## Usage
 
+### Basic Usage
+
 ```java
-// Use MavenPluginManager instead of DefaultPluginManager
-PluginManager pluginManager = new MavenPluginManager();
+// Use the builder to create MavenPluginManager
+PluginManager pluginManager = MavenPluginManagerBuilder.create().build();
 pluginManager.loadPlugins();
 pluginManager.startPlugins();
 
 List<Greeting> greetings = pluginManager.getExtensions(Greeting.class);
 for (Greeting greeting : greetings) {
     System.out.println(">>> " + greeting.getGreeting());
+}
+```
+
+### Builder Configuration
+
+The builder supports various configuration options:
+
+```java
+PluginManager pluginManager = MavenPluginManagerBuilder.create()
+    .pluginsRoot(Paths.get("my-plugins"))           // custom plugins directory
+    .localRepository(Paths.get("/custom/m2/repo"))  // custom local Maven repo
+    .addRemoteRepository("jitpack", "https://jitpack.io")  // additional repo
+    .includeMavenCentral(true)                      // include Maven Central (default)
+    .processLooseJars(true)                         // process loose JARs (default)
+    .skipExistingDependencies(true)                 // skip if lib/ exists (default)
+    .build();
+```
+
+### Extending MavenPluginManager
+
+For advanced customization, extend `MavenPluginManager`:
+
+```java
+class CustomPluginManager extends MavenPluginManager {
+    @Override
+    protected PluginFactory createPluginFactory() {
+        return new CustomPluginFactory();
+    }
 }
 ```
 
