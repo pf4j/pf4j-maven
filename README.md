@@ -1,6 +1,11 @@
 PF4J Maven
 =====================
 
+[![GitHub Actions Status](https://github.com/pf4j/pf4j-maven/actions/workflows/build.yml/badge.svg)](https://github.com/pf4j/pf4j-maven/actions/workflows/build.yml)
+[![Maven Central](http://img.shields.io/maven-central/v/org.pf4j/pf4j-maven.svg)](http://search.maven.org/#search|ga|1|pf4j-maven)
+
+**Thin JAR plugin support for PF4J with Maven dependency resolution.**
+
 A proof-of-concept for [pf4j/pf4j#208](https://github.com/pf4j/pf4j/issues/208) - plugins as Maven artifacts with automatic dependency resolution.
 
 ## Overview
