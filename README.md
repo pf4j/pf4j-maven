@@ -2,6 +2,7 @@ PF4J Maven
 =====================
 
 [![GitHub Actions Status](https://github.com/pf4j/pf4j-maven/actions/workflows/build.yml/badge.svg)](https://github.com/pf4j/pf4j-maven/actions/workflows/build.yml)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=pf4j_pf4j-maven&metric=coverage)](https://sonarcloud.io/summary/overall?id=pf4j_pf4j-maven)
 [![Maven Central](http://img.shields.io/maven-central/v/org.pf4j/pf4j-maven.svg)](http://search.maven.org/#search|ga|1|pf4j-maven)
 
 **Thin JAR plugin support for PF4J with Maven dependency resolution.**
